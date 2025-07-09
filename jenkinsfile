@@ -1,0 +1,29 @@
+pipeline {
+  agent any
+
+  stages {
+    stage('Checkout from GitHub') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Create dummy file') {
+      steps {
+        sh 'echo "This is a dummy file created by Jenkins pipeline." > dummy.txt'
+      }
+    }
+
+    stage('Upload to S3') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+          sh '''
+            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+            aws s3 cp dummy.txt s3://new/
+          '''
+        }
+      }
+    }
+  }
+}
