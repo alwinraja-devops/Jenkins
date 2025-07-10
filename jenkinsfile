@@ -23,7 +23,8 @@ pipeline {
                 checkout([$class: 'GitSCM',
                     branches: [[name: "*/${params.BRANCH_NAME}"]],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/alwinraja-devops/Jenkins.git'
+                        url: 'https://github.com/alwinraja-devops/Jenkins.git',
+                        credentialsId: 'github-id' // ✅ Replace with your GitHub PAT credentials ID
                     ]]
                 ])
             }
@@ -32,7 +33,7 @@ pipeline {
         stage('Configure AWS Credentials') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'aws-creds',
+                    credentialsId: 'aws-credentials', // ✅ Replace with your AWS credentials ID
                     usernameVariable: 'AWS_ACCESS_KEY_ID',
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
@@ -43,6 +44,9 @@ pipeline {
                         echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}" >> ~/.aws/credentials
                         echo "[default]" > ~/.aws/config
                         echo "region=${AWS_REGION}" >> ~/.aws/config
+
+                        echo "✅ AWS credentials configured"
+                        aws sts get-caller-identity
                     '''
                 }
             }
@@ -51,6 +55,7 @@ pipeline {
         stage('Create ECR Repo if Missing') {
             steps {
                 sh '''
+                    echo "🔍 Checking for ECR repo: $ECR_REPO"
                     aws ecr describe-repositories --repository-names $ECR_REPO || \
                     aws ecr create-repository --repository-name $ECR_REPO
                 '''
@@ -60,9 +65,14 @@ pipeline {
         stage('Build & Push Docker Image') {
             steps {
                 sh '''
+                    echo "🐳 Building Docker image: $ECR_REPO:$IMAGE_TAG"
                     docker build -t $ECR_REPO:$IMAGE_TAG .
+                    
+                    echo "🔐 Logging in to ECR"
                     aws ecr get-login-password --region $AWS_REGION | \
                     docker login --username AWS --password-stdin $ECR_URL
+
+                    echo "📦 Tagging and pushing image to ECR: $ECR_URL:$IMAGE_TAG"
                     docker tag $ECR_REPO:$IMAGE_TAG $ECR_URL:$IMAGE_TAG
                     docker push $ECR_URL:$IMAGE_TAG
                 '''
@@ -72,10 +82,12 @@ pipeline {
         stage('Create ECS Cluster if Missing') {
             steps {
                 sh '''
+                    echo "🔍 Checking ECS Cluster: $ECS_CLUSTER"
                     if ! aws ecs describe-clusters --clusters $ECS_CLUSTER | grep $ECS_CLUSTER > /dev/null; then
+                        echo "🆕 Creating ECS Cluster..."
                         aws ecs create-cluster --cluster-name $ECS_CLUSTER
                     else
-                        echo "ECS Cluster $ECS_CLUSTER already exists."
+                        echo "✅ ECS Cluster $ECS_CLUSTER already exists."
                     fi
                 '''
             }
@@ -84,6 +96,7 @@ pipeline {
         stage('Register Task Definition') {
             steps {
                 sh '''
+                    echo "📄 Registering ECS Task Definition"
                     cat > task-def.json <<EOF
                     {
                       "family": "$ECS_TASK_FAMILY",
@@ -112,16 +125,17 @@ pipeline {
             }
         }
 
-        stage('Create ECS Service if Missing') {
+        stage('Create/Update ECS Service') {
             steps {
                 sh '''
-                    SERVICE_EXISTS=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query 'services[0].status' --output text)
+                    echo "🔄 Checking ECS Service: $ECS_SERVICE"
+                    SERVICE_EXISTS=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query 'services[0].status' --output text || echo "NONE")
 
                     if [ "$SERVICE_EXISTS" = "ACTIVE" ]; then
-                        echo "ECS service already exists. Updating it..."
+                        echo "♻️ Updating ECS service..."
                         aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
                     else
-                        echo "Creating ECS Fargate service..."
+                        echo "🚀 Creating ECS Fargate service..."
                         aws ecs create-service \
                           --cluster $ECS_CLUSTER \
                           --service-name $ECS_SERVICE \
@@ -137,10 +151,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployed to ECS successfully! Check the ECS Console to view your app."
+            echo "✅ Deployment complete! App running on ECS Fargate."
         }
         failure {
-            echo "❌ Pipeline failed. Check console output for error logs."
+            echo "❌ Pipeline failed. Check logs and AWS Console for details."
         }
     }
 }
