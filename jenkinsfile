@@ -20,7 +20,7 @@ pipeline {
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
                         url: 'https://github.com/alwinraja-devops/Jenkins.git',
-                        credentialsId: 'github-id' // ✅ Replace with your GitHub credentials ID
+                        credentialsId: 'github-id' // ✅ Replace with your GitHub PAT credentials ID
                     ]]
                 ])
             }
