@@ -14,15 +14,10 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Confirm Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/alwinraja-devops/Jenkins.git',
-                        credentialsId: 'github-id' // ✅ Replace with your GitHub PAT credentials ID
-                    ]]
-                ])
+                echo "✅ Code checked out by Jenkins SCM (main branch)"
+                sh 'ls -la' // Confirm source code is present
             }
         }
 
@@ -41,7 +36,6 @@ pipeline {
                         echo "[default]" > ~/.aws/config
                         echo "region=${AWS_REGION}" >> ~/.aws/config
 
-                        echo "✅ AWS credentials configured"
                         aws sts get-caller-identity
                     '''
                 }
