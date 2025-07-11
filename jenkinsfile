@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'project', description: 'Git branch to build')
-    }
-
     environment {
         AWS_REGION = 'us-east-1'
         AWS_ACCOUNT_ID = '340752818053'
@@ -21,10 +17,10 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 checkout([$class: 'GitSCM',
-                    branches: [[name: "*/${params.BRANCH_NAME}"]],
+                    branches: [[name: '*/main']],
                     userRemoteConfigs: [[
                         url: 'https://github.com/alwinraja-devops/Jenkins.git',
-                        credentialsId: 'github-id' // ✅ Replace with your GitHub PAT credentials ID
+                        credentialsId: 'github-id' // ✅ Replace with your GitHub credentials ID
                     ]]
                 ])
             }
@@ -67,7 +63,7 @@ pipeline {
                 sh '''
                     echo "🐳 Building Docker image: $ECR_REPO:$IMAGE_TAG"
                     docker build -t $ECR_REPO:$IMAGE_TAG .
-                    
+
                     echo "🔐 Logging in to ECR"
                     aws ecr get-login-password --region $AWS_REGION | \
                     docker login --username AWS --password-stdin $ECR_URL
