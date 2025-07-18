@@ -31,7 +31,7 @@ stage('Docker Build & Tag') {
     steps {
         script {
             sh """
-                docker build -t ${ECR_REPO}:${IMAGE_TAG} -f Dockerfile.dockerfile .
+                docker build -t ${ECR_REPO}:${IMAGE_TAG} .
                 docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}
             """
         }
