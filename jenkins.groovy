@@ -32,7 +32,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+                       docker build -t $ECR_REPO:$IMAGE_TAG -f Dockerfile.dockerfile .'
                         docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}
                     """
                 }
