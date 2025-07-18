@@ -48,22 +48,29 @@ stage('Docker Build & Tag') {
             }
         }
 
-        stage('Push Image to ECR') {
-            steps {
-                sh "docker push ${ECR_URI}"
-            }
-        }
-
-        stage('Deploy to ECS') {
-            steps {
-                sh """
-                    aws ecs update-service \
-                      --cluster ${CLUSTER_NAME} \
-                      --service ${SERVICE_NAME} \
-                      --force-new-deployment \
-                      --region ${AWS_REGION}
-                """
-            }
+stage('Push Image to ECR') {
+    steps {
+        script {
+            sh """
+                export PATH=\$PATH:/usr/local/bin
+                docker push ${ECR_URI}
+            """
         }
     }
 }
+
+stage('Deploy to ECS') {
+    steps {
+        script {
+            sh """
+                export PATH=\$PATH:/usr/local/bin
+                aws ecs update-service \
+                  --cluster ${CLUSTER_NAME} \
+                  --service ${SERVICE_NAME} \
+                  --force-new-deployment \
+                  --region ${AWS_REGION}
+            """
+        }
+    }
+}
+
