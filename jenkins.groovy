@@ -27,18 +27,16 @@ pipeline {
                 ])
             }
         }
-
-        stage('Docker Build & Tag') {
-            steps {
-                script {
-                    sh """
-                       docker build -t $ECR_REPO:$IMAGE_TAG -f Dockerfile.dockerfile .'
-                        docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}
-                    """
-                }
-            }
+stage('Docker Build & Tag') {
+    steps {
+        script {
+            sh """
+                docker build -t ${ECR_REPO}:${IMAGE_TAG} -f Dockerfile.dockerfile .
+                docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}
+            """
         }
-
+    }
+}
         stage('Login to ECR') {
             steps {
                 script {
