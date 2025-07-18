@@ -11,18 +11,30 @@ pipeline {
         SERVICE_NAME   = 'node-api-service'
     }
 
+    options {
+        skipDefaultCheckout(true) // Prevents automatic checkout
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'Docker', url: 'https://github.com/alwinraja-devops/Jenkins.git'
+                // Clean workspace to avoid "already exists" error
+                cleanWs()
+                // Explicit checkout
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/Docker']],
+                    userRemoteConfigs: [[url: 'https://github.com/alwinraja-devops/Jenkins.git']]
+                ])
             }
         }
 
         stage('Docker Build & Tag') {
             steps {
                 script {
-                    sh 'docker build -t $ECR_REPO:$IMAGE_TAG .'
-                    sh 'docker tag $ECR_REPO:$IMAGE_TAG $ECR_URI'
+                    sh """
+                        docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+                        docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}
+                    """
                 }
             }
         }
@@ -30,28 +42,29 @@ pipeline {
         stage('Login to ECR') {
             steps {
                 script {
-                    sh 'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI'
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    """
                 }
             }
         }
 
         stage('Push Image to ECR') {
             steps {
-                sh 'docker push $ECR_URI'
+                sh "docker push ${ECR_URI}"
             }
         }
 
         stage('Deploy to ECS') {
             steps {
-                script {
-                    sh '''
-                        aws ecs update-service \
-                          --cluster $CLUSTER_NAME \
-                          --service $SERVICE_NAME \
-                          --force-new-deployment \
-                          --region $AWS_REGION
-                    '''
-                }
+                sh """
+                    aws ecs update-service \
+                      --cluster ${CLUSTER_NAME} \
+                      --service ${SERVICE_NAME} \
+                      --force-new-deployment \
+                      --region ${AWS_REGION}
+                """
             }
         }
     }
