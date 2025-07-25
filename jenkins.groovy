@@ -73,5 +73,3 @@ stage('Deploy to ECS') {
         }
     }
 }
-
-
