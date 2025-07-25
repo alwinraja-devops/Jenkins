@@ -73,41 +73,38 @@ pipeline {
             }
         }
 
-        stage('Register ECS Task') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    script {
-                        sh '''
-                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            export AWS_DEFAULT_REGION=${AWS_REGION}
+stage('Register ECS Task') {
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+            script {
+                sh '''
+                    export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                    export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                    export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                            aws ecs register-task-definition \
-                              --family ${TASK_FAMILY} \
-                              --requires-compatibilities FARGATE \
-                              --network-mode awsvpc \
-                              --cpu ${CPU} \
-                              --memory ${MEMORY} \
-                              --execution-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole \
-                              --container-definitions '[
-                                  {
-                                    "name": "${CONTAINER_NAME}",
-                                    "image": "${ECR_URI}",
-                                    "portMappings": [
-                                      {
-                                        "containerPort": 3000,
-                                        "hostPort": 3000,
-                                        "protocol": "tcp"
-                                      }
-                                    ],
-                                    "essential": true
-                                  }
-                              ]'
-                        '''
-                    }
-                }
+                    aws ecs register-task-definition \
+                      --family ${TASK_FAMILY} \
+                      --requires-compatibilities FARGATE \
+                      --network-mode awsvpc \
+                      --cpu ${CPU} \
+                      --memory ${MEMORY} \
+                      --execution-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole \
+                      --container-definitions "[{
+                        \\"name\\": \\"${CONTAINER_NAME}\\",
+                        \\"image\\": \\"${ECR_URI}\\",
+                        \\"portMappings\\": [{
+                          \\"containerPort\\": 3000,
+                          \\"hostPort\\": 3000,
+                          \\"protocol\\": \\"tcp\\"
+                        }],
+                        \\"essential\\": true
+                      }]"
+                '''
             }
         }
+    }
+}
+
 
         stage('Create/Update ECS Cluster & Service') {
             steps {
