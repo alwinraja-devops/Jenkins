@@ -3,148 +3,32 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
-        AWS_ACCOUNT_ID = '340752818053'
-        ECR_REPO = 'simple-node-app'
-        IMAGE_TAG = 'latest'
-        ECR_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
-        ECS_CLUSTER = 'jenkins-demo-cluster'
-        ECS_SERVICE = 'jenkins-demo-service'
-        ECS_TASK_FAMILY = 'jenkins-demo-task'
-        CONTAINER_NAME = 'simple-container'
+        TF_VAR_key_name = credentials('aws-keypair-name') // OR hardcode if needed
     }
 
     stages {
-        stage('Confirm Checkout') {
+        stage('Clone Terraform Code') {
             steps {
-                echo "✅ Code checked out by Jenkins SCM (main branch)"
-                sh 'ls -la' // Confirm source code is present
+                git 'https://github.com/your-user/terraform-ec2-multi-os.git' // replace with your repo
             }
         }
 
-        stage('Configure AWS Credentials') {
+        stage('Terraform Init') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'aws-credentials', // ✅ Replace with your AWS credentials ID
-                    usernameVariable: 'AWS_ACCESS_KEY_ID',
-                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )]) {
-                    sh '''
-                        mkdir -p ~/.aws
-                        echo "[default]" > ~/.aws/credentials
-                        echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}" >> ~/.aws/credentials
-                        echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}" >> ~/.aws/credentials
-                        echo "[default]" > ~/.aws/config
-                        echo "region=${AWS_REGION}" >> ~/.aws/config
-
-                        aws sts get-caller-identity
-                    '''
-                }
+                sh 'terraform init'
             }
         }
 
-        stage('Create ECR Repo if Missing') {
+        stage('Terraform Plan') {
             steps {
-                sh '''
-                    echo "🔍 Checking for ECR repo: $ECR_REPO"
-                    aws ecr describe-repositories --repository-names $ECR_REPO || \
-                    aws ecr create-repository --repository-name $ECR_REPO
-                '''
+                sh 'terraform plan'
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Terraform Apply') {
             steps {
-                sh '''
-                    echo "🐳 Building Docker image: $ECR_REPO:$IMAGE_TAG"
-                    docker build -t $ECR_REPO:$IMAGE_TAG .
-
-                    echo "🔐 Logging in to ECR"
-                    aws ecr get-login-password --region $AWS_REGION | \
-                    docker login --username AWS --password-stdin $ECR_URL
-
-                    echo "📦 Tagging and pushing image to ECR: $ECR_URL:$IMAGE_TAG"
-                    docker tag $ECR_REPO:$IMAGE_TAG $ECR_URL:$IMAGE_TAG
-                    docker push $ECR_URL:$IMAGE_TAG
-                '''
+                sh 'terraform apply -auto-approve'
             }
-        }
-
-        stage('Create ECS Cluster if Missing') {
-            steps {
-                sh '''
-                    echo "🔍 Checking ECS Cluster: $ECS_CLUSTER"
-                    if ! aws ecs describe-clusters --clusters $ECS_CLUSTER | grep $ECS_CLUSTER > /dev/null; then
-                        echo "🆕 Creating ECS Cluster..."
-                        aws ecs create-cluster --cluster-name $ECS_CLUSTER
-                    else
-                        echo "✅ ECS Cluster $ECS_CLUSTER already exists."
-                    fi
-                '''
-            }
-        }
-
-        stage('Register Task Definition') {
-            steps {
-                sh '''
-                    echo "📄 Registering ECS Task Definition"
-                    cat > task-def.json <<EOF
-                    {
-                      "family": "$ECS_TASK_FAMILY",
-                      "networkMode": "awsvpc",
-                      "requiresCompatibilities": ["FARGATE"],
-                      "cpu": "256",
-                      "memory": "512",
-                      "containerDefinitions": [
-                        {
-                          "name": "$CONTAINER_NAME",
-                          "image": "$ECR_URL:$IMAGE_TAG",
-                          "essential": true,
-                          "portMappings": [
-                            {
-                              "containerPort": 3000,
-                              "protocol": "tcp"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                    EOF
-
-                    aws ecs register-task-definition --cli-input-json file://task-def.json
-                '''
-            }
-        }
-
-        stage('Create/Update ECS Service') {
-            steps {
-                sh '''
-                    echo "🔄 Checking ECS Service: $ECS_SERVICE"
-                    SERVICE_EXISTS=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query 'services[0].status' --output text || echo "NONE")
-
-                    if [ "$SERVICE_EXISTS" = "ACTIVE" ]; then
-                        echo "♻️ Updating ECS service..."
-                        aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
-                    else
-                        echo "🚀 Creating ECS Fargate service..."
-                        aws ecs create-service \
-                          --cluster $ECS_CLUSTER \
-                          --service-name $ECS_SERVICE \
-                          --task-definition $ECS_TASK_FAMILY \
-                          --desired-count 1 \
-                          --launch-type FARGATE \
-                          --network-configuration "awsvpcConfiguration={subnets=[subnet-0610380c4b701ba61],securityGroups=[sg-0bd3580461331e484],assignPublicIp=ENABLED}"
-                    fi
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Deployment complete! App running on ECS Fargate."
-        }
-        failure {
-            echo "❌ Pipeline failed. Check logs and AWS Console for details."
         }
     }
 }
